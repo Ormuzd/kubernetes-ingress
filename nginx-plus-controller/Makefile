@@ -4,7 +4,7 @@ VERSION = 0.7.0
 TAG = $(VERSION)
 PREFIX =
 
-DOCKER_RUN = docker run --rm -v $(shell pwd)/../:/go/src/github.com/nginxinc/kubernetes-ingress -w /go/src/github.com/nginxinc/kubernetes-ingress/nginx-plus-controller/
+DOCKER_RUN = docker run --rm -v $(shell pwd)/../:/go/src/github.com/Ormuzd/kubernetes-ingress -w /go/src/github.com/Ormuzd/kubernetes-ingress/nginx-plus-controller/
 GOLANG_CONTAINER = golang:1.7
 
 BUILD_IN_CONTAINER = 1

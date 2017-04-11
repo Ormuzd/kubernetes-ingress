@@ -1,6 +1,6 @@
 # NGINX Plus Ingress Controller
 
-This is an implementation of a Kubernetes Ingress controller for NGINX Plus, which provides HTTP load balancing for applications your deploy in your Kubernetes cluster. You can find more details on what an Ingress controller is as well as difference between NGINX and NGINX Plus controllers on the [main page](https://github.com/nginxinc/kubernetes-ingress).
+This is an implementation of a Kubernetes Ingress controller for NGINX Plus, which provides HTTP load balancing for applications your deploy in your Kubernetes cluster. You can find more details on what an Ingress controller is as well as difference between NGINX and NGINX Plus controllers on the [main page](https://github.com/Ormuzd/kubernetes-ingress).
 
 ## How to Use the Controller
 

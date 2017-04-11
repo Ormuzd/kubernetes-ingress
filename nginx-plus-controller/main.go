@@ -6,8 +6,8 @@ import (
 
 	"github.com/golang/glog"
 
-	"github.com/nginxinc/kubernetes-ingress/nginx-plus-controller/controller"
-	"github.com/nginxinc/kubernetes-ingress/nginx-plus-controller/nginx"
+	"github.com/Ormuzd/kubernetes-ingress/nginx-plus-controller/controller"
+	"github.com/Ormuzd/kubernetes-ingress/nginx-plus-controller/nginx"
 	"k8s.io/kubernetes/pkg/api"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 )

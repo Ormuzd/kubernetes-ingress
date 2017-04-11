@@ -4,7 +4,7 @@ VERSION = 0.7.0
 TAG = $(VERSION)
 PREFIX = nginxdemos/nginx-ingress
 
-DOCKER_RUN = docker run --rm -v $(shell pwd)/../:/go/src/github.com/nginxinc/kubernetes-ingress -w /go/src/github.com/nginxinc/kubernetes-ingress/nginx-controller/
+DOCKER_RUN = docker run --rm -v $(shell pwd)/../:/go/src/github.com/Ormuzd/kubernetes-ingress -w /go/src/github.com/Ormuzd/kubernetes-ingress/nginx-controller/
 GOLANG_CONTAINER = golang:1.7
 DOCKERFILE = Dockerfile
 
