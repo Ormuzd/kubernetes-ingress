@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 
+	"strconv"
+
 	"github.com/golang/glog"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/apis/extensions"
@@ -43,6 +45,17 @@ func (cnf *Configurator) AddOrUpdateIngress(name string, ingEx *IngressEx) {
 	cnf.nginx.AddOrUpdateIngress(name, nginxCfg)
 	if err := cnf.nginx.Reload(); err != nil {
 		glog.Errorf("Error when adding or updating ingress %q: %q", name, err)
+	}
+}
+
+func (cnf *Configurator) AddOrUpdateConfigmap(name string, configEx *ConfigmapEx) {
+	cnf.lock.Lock()
+	defer cnf.lock.Unlock()
+
+	nginxCfg := cnf.generateNginxConfigmap(configEx)
+	cnf.nginx.AddOrUpdateConfigmap(name, nginxCfg)
+	if err := cnf.nginx.Reload(); err != nil {
+		glog.Errorf("Error when adding or updating configmap %q: %q", name, err)
 	}
 }
 
@@ -93,7 +106,6 @@ func (cnf *Configurator) generateNginxCfg(ingEx *IngressEx, pems map[string]stri
 		upstream := cnf.createUpstream(ingEx, name, ingEx.Ingress.Spec.Backend, ingEx.Ingress.Namespace)
 		upstreams[name] = upstream
 	}
-
 	var servers []Server
 
 	for _, rule := range ingEx.Ingress.Spec.Rules {
@@ -310,6 +322,11 @@ func (cnf *Configurator) createConfig(ingEx *IngressEx) Config {
 	return ingCfg
 }
 
+func (cnf *Configurator) createConfigmap(cfgEx *ConfigmapEx) Config {
+	Cfg := *cnf.config
+	return Cfg
+}
+
 func getWebsocketServices(ingEx *IngressEx) map[string]bool {
 	wsServices := make(map[string]bool)
 
@@ -392,7 +409,6 @@ func createLocation(path string, upstream Upstream, cfg *Config, websocket bool,
 
 func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *extensions.IngressBackend, namespace string) Upstream {
 	ups := NewUpstreamWithDefaultServer(name)
-
 	endps, exists := ingEx.Endpoints[backend.ServiceName+backend.ServicePort.String()]
 	if exists {
 		var upsServers []UpstreamServer
@@ -404,7 +420,23 @@ func (cnf *Configurator) createUpstream(ingEx *IngressEx, name string, backend *
 			ups.UpstreamServers = upsServers
 		}
 	}
+	return ups
+}
 
+func (cnf *Configurator) createUpstreamWithCfg(cfgEx *ConfigmapEx, name string, backend map[string]string, namespace string) Upstream {
+	ups := NewUpstreamWithDefaultServer(name)
+	endps, exists := cfgEx.Endpoints[cfgEx.Config.Data["servicename"]+cfgEx.Config.Data["hostport"]]
+	if exists {
+		var upsServers []UpstreamServer
+		for _, endp := range endps {
+			addressport := strings.Split(endp, ":")
+			upsServers = append(upsServers, UpstreamServer{addressport[0], addressport[1]})
+		}
+		if len(upsServers) > 0 {
+			ups.UpstreamServers = upsServers
+		}
+		//glog.Infoln(upsServers)
+	}
 	return ups
 }
 
@@ -416,7 +448,11 @@ func pathOrDefault(path string) string {
 }
 
 func getNameForUpstream(ing *extensions.Ingress, host string, service string) string {
-	return fmt.Sprintf("%v-%v-%v-%v", ing.Namespace, ing.Name, host, service)
+	return fmt.Sprintf("%v.%v.com", service, ing.Namespace)
+}
+
+func getNameForUpstreamFromCfg(cfg *api.ConfigMap, service string) string {
+	return fmt.Sprintf("%v.%v.com", service, cfg.Namespace)
 }
 
 func upstreamMapToSlice(upstreams map[string]Upstream) []Upstream {
@@ -437,6 +473,16 @@ func (cnf *Configurator) DeleteIngress(name string) {
 	cnf.nginx.DeleteIngress(name)
 	if err := cnf.nginx.Reload(); err != nil {
 		glog.Errorf("Error when removing ingress %q: %q", name, err)
+	}
+}
+
+// DeleteConfigmap deletes NGINX configuration for an Configmap resource
+func (cnf *Configurator) DeleteConfigmap(name string) {
+	cnf.lock.Lock()
+	defer cnf.lock.Unlock()
+	cnf.nginx.DeleteConfigmap(name)
+	if err := cnf.nginx.Reload(); err != nil {
+		glog.Errorf("Error when removing config %q: %q", name, err)
 	}
 }
 
@@ -463,4 +509,24 @@ func (cnf *Configurator) UpdateConfig(config *Config) {
 	}
 
 	cnf.nginx.UpdateMainConfigFile(mainCfg)
+}
+
+func (cnf *Configurator) generateNginxConfigmap(cfgEx *ConfigmapEx) ConfigMapNginxConfig {
+	Cfg := cnf.createConfigmap(cfgEx)
+	upstreams := make(map[string]Upstream)
+
+	name := getNameForUpstreamFromCfg(cfgEx.Config, cfgEx.Config.Data["servicename"])
+	upstream := cnf.createUpstreamWithCfg(cfgEx, name, cfgEx.Config.Data, cfgEx.Config.Namespace)
+	upstreams[name] = upstream
+	port, _ := strconv.Atoi(cfgEx.Config.Data["hostport"])
+	server := Server{Name: emptyHost, ServerPort: port}
+	loc := createLocation(pathOrDefault("/"), upstreams[name], &Cfg, false, "", false)
+	var locations []Location
+	locations = append(locations, loc)
+	var servers []Server
+
+	server.Locations = locations
+	servers = append(servers, server)
+
+	return ConfigMapNginxConfig{Upstreams: upstreamMapToSlice(upstreams), Servers: servers}
 }

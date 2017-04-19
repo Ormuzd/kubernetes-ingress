@@ -38,11 +38,18 @@ type UpstreamServer struct {
 	Port    string
 }
 
+// ConfigMapNginxConfig describes a configmap with NGINX TCP stream
+type ConfigMapNginxConfig struct {
+	Upstreams []Upstream
+	Servers   []Server
+}
+
 // Server describes an NGINX server
 type Server struct {
 	ServerSnippets        []string
 	Name                  string
 	ServerTokens          bool
+	ServerPort            int
 	Locations             []Location
 	SSL                   bool
 	SSLCertificate        string
@@ -99,7 +106,7 @@ type NginxMainConfig struct {
 func NewUpstreamWithDefaultServer(name string) Upstream {
 	return Upstream{
 		Name:            name,
-		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "8181"}},
+		UpstreamServers: []UpstreamServer{UpstreamServer{Address: "127.0.0.1", Port: "10000"}},
 	}
 }
 
@@ -134,12 +141,29 @@ func (nginx *NginxController) DeleteIngress(name string) {
 	}
 }
 
+// DeleteConfigmap deletes the configuration file
+func (nginx *NginxController) DeleteConfigmap(name string) {
+	filename := nginx.getConfigMapNginxConfigFileName(name)
+	glog.V(3).Infoln("deleting %v", filename)
+
+	if !nginx.local {
+		if err := os.Remove(filename); err != nil {
+			glog.Warningf("Failed to delete %v: %v", filename, err)
+		}
+	}
+}
+
 // AddOrUpdateIngress creates or updates a file with
 // the specified configuration for the specified ingress
 func (nginx *NginxController) AddOrUpdateIngress(name string, config IngressNginxConfig) {
-	glog.V(3).Infof("Updating NGINX configuration")
 	filename := nginx.getIngressNginxConfigFileName(name)
-	nginx.templateIt(config, filename)
+	nginx.templateIt(config, filename, "ingress.tmpl")
+}
+
+// AddOrUpdateConfigmap creates or updates a file with configmap
+func (nginx *NginxController) AddOrUpdateConfigmap(name string, config ConfigMapNginxConfig) {
+	filename := nginx.getConfigMapNginxConfigFileName(name)
+	nginx.templateItWithConfigmap(config, filename)
 }
 
 // AddOrUpdateDHParam creates the servers dhparam.pem file
@@ -195,8 +219,14 @@ func (nginx *NginxController) getIngressNginxConfigFileName(name string) string 
 	return path.Join(nginx.nginxConfdPath, name+".conf")
 }
 
-func (nginx *NginxController) templateIt(config IngressNginxConfig, filename string) {
-	tmpl, err := template.New("ingress.tmpl").ParseFiles("ingress.tmpl")
+func (nginx *NginxController) getConfigMapNginxConfigFileName(name string) string {
+	return path.Join(nginx.nginxConfdPath, name+".config")
+}
+
+func (nginx *NginxController) templateIt(config IngressNginxConfig,
+	filename string,
+	templname string) {
+	tmpl, err := template.New(templname).ParseFiles(templname)
 	if err != nil {
 		glog.Fatal("Failed to parse template file")
 	}
@@ -222,6 +252,27 @@ func (nginx *NginxController) templateIt(config IngressNginxConfig, filename str
 	}
 
 	glog.V(3).Infof("NGINX configuration file had been updated")
+}
+
+func (nginx *NginxController) templateItWithConfigmap(config ConfigMapNginxConfig, filename string) {
+	tmpl, err := template.New("configmap.tmpl").ParseFiles("configmap.tmpl")
+	if err != nil {
+		glog.Fatal("Failed to parse template file")
+	}
+
+	if !nginx.local {
+		w, err := os.Create(filename)
+		if err != nil {
+			glog.Fatalf("Failed to open %v: %v", filename, err)
+		}
+		defer w.Close()
+
+		if err := tmpl.Execute(w, config); err != nil {
+			glog.Fatalf("Failed to write template %v", err)
+		}
+	} else {
+		glog.Errorln("nginx local exist")
+	}
 }
 
 // Reload reloads NGINX
@@ -287,7 +338,7 @@ func (nginx *NginxController) UpdateMainConfigFile(cfg *NginxMainConfig) {
 	}
 
 	filename := "/etc/nginx/nginx.conf"
-	glog.V(3).Infof("Writing NGINX conf to %v", filename)
+	glog.Infof("Writing NGINX conf to %v", filename)
 
 	if glog.V(3) {
 		tmpl.Execute(os.Stdout, cfg)

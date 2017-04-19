@@ -4,6 +4,10 @@ package nginx
 type Config struct {
 	LocationSnippets              []string
 	ServerSnippets                []string
+	ServerPort                    string
+	ServerNamespace               string
+	ServiceName                   string
+	ServicePort                   string
 	ServerTokens                  bool
 	ProxyConnectTimeout           string
 	ProxyReadTimeout              string

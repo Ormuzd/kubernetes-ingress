@@ -60,7 +60,7 @@ func (t *taskQueue) requeue(key string, err error) {
 }
 
 func (t *taskQueue) requeueAfter(key string, err error, after time.Duration) {
-	glog.Errorf("Requeuing %v after %s, err %v", key, after.String(), err)
+	//glog.Errorf("Requeuing %v after %s, err %v", key, after.String(), err)
 	go func(key string, after time.Duration) {
 		time.Sleep(after)
 		t.queue.Add(key)
@@ -120,6 +120,9 @@ func (s *StoreToIngressLister) List() (ing extensions.IngressList, err error) {
 // GetServiceIngress gets all the Ingress' that have rules pointing to a service.
 // Note that this ignores services without the right nodePorts.
 func (s *StoreToIngressLister) GetServiceIngress(svc *api.Service) (ings []extensions.Ingress, err error) {
+	if svc.ObjectMeta.Annotations != nil {
+		//glog.Infoln(svc.Name, svc.ObjectMeta.Annotations, svc.Spec.Type)
+	}
 	for _, m := range s.Store.List() {
 		ing := *m.(*extensions.Ingress)
 		if ing.Namespace != svc.Namespace {
@@ -127,6 +130,7 @@ func (s *StoreToIngressLister) GetServiceIngress(svc *api.Service) (ings []exten
 		}
 		if ing.Spec.Backend != nil {
 			if ing.Spec.Backend.ServiceName == svc.Name {
+				glog.Infoln(ing)
 				ings = append(ings, ing)
 			}
 		}
@@ -143,6 +147,7 @@ func (s *StoreToIngressLister) GetServiceIngress(svc *api.Service) (ings []exten
 	}
 	if len(ings) == 0 {
 		err = fmt.Errorf("No ingress for service %v", svc.Name)
+		//glog.Infoln(err)
 	}
 	return
 }

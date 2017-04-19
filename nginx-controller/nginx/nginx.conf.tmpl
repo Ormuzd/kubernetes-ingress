@@ -7,7 +7,7 @@ pid        /var/run/nginx.pid;
 
 
 events {
-    worker_connections  1024;
+    worker_connections  4096;
 }
 
 
@@ -36,8 +36,9 @@ http {
 
     #gzip  on;
 
-    server_names_hash_max_size {{.ServerNamesHashMaxSize}};
-    {{if .ServerNamesHashBucketSize}}server_names_hash_bucket_size {{.ServerNamesHashBucketSize}};{{end}}
+    #server_names_hash_max_size {{.ServerNamesHashMaxSize}};
+    #{{if .ServerNamesHashBucketSize}}server_names_hash_bucket_size {{.ServerNamesHashBucketSize}};{{end}}
+    server_names_hash_bucket_size 64;
 
     map $http_upgrade $connection_upgrade {
         default upgrade;
@@ -52,7 +53,6 @@ http {
     server {
         listen 80 default_server;
         server_name _;
-
         location /nginx-health {
             access_log off;
             default_type text/plain;
@@ -62,4 +62,15 @@ http {
     {{end}}
 
     include /etc/nginx/conf.d/*.conf;
+}
+
+stream {
+    {{if .LogFormat -}}
+    log_format  main  '{{.LogFormat}}';
+    {{- else -}}
+    log_format  main  '$remote_addr [$time_local] ';
+    {{- end }}
+    access_log  /var/log/nginx/access.log  main;
+
+    include /etc/nginx/conf.d/*.config;
 }
